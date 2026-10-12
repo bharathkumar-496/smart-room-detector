@@ -1,0 +1,490 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Smart Room Proctor AI | Smartphone & Malpractice Detection</title>
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            brand: {
+              50: '#eef2ff',
+              100: '#e0e7ff',
+              400: '#818cf8',
+              500: '#6366f1',
+              600: '#4f46e5',
+              900: '#1e1b4b',
+            },
+            danger: {
+              400: '#f87171',
+              500: '#ef4444',
+              600: '#dc2626',
+            },
+            emerald: {
+              400: '#34d399',
+              500: '#10b981',
+              600: '#059669',
+            }
+          },
+          animation: {
+            'pulse-fast': 'pulse 1s cubic-bezier(0.4, 0, 0.6, 1) infinite',
+            'scan': 'scan 3s linear infinite',
+          },
+          keyframes: {
+            scan: {
+              '0%, 100%': { top: '0%' },
+              '50%': { top: '95%' },
+            }
+          }
+        }
+      }
+    }
+  </script>
+  <!-- Google Fonts & Lucide Icons -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <!-- TensorFlow.js & Teachable Machine Image -->
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@latest/dist/tf.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@teachablemachine/image@latest/dist/teachablemachine-image.min.js"></script>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body class="bg-slate-950 text-slate-100 min-h-screen font-['Plus_Jakarta_Sans'] antialiased selection:bg-indigo-500 selection:text-white">
+
+  <!-- Header -->
+  <header class="border-b border-slate-800/80 bg-slate-900/60 backdrop-blur-md sticky top-0 z-40">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+      <div class="flex items-center gap-3">
+        <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-indigo-600 to-violet-500 flex items-center justify-center shadow-lg shadow-indigo-500/25">
+          <i data-lucide="shield-alert" class="w-5 h-5 text-white"></i>
+        </div>
+        <div>
+          <h1 class="text-base font-bold text-white tracking-tight flex items-center gap-2">
+            SmartRoom Proctor AI
+            <span class="text-[10px] font-mono font-semibold px-2 py-0.5 rounded-full bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">v2.4 TM</span>
+          </h1>
+          <p class="text-xs text-slate-400">Automated Smartphone & Malpractice Monitoring</p>
+        </div>
+      </div>
+
+      <!-- Right Action Bar -->
+      <div class="flex items-center gap-2 sm:gap-3">
+        <!-- Model Status Pill -->
+        <div id="modelStatusPill" class="flex items-center gap-2 px-3 py-1.5 rounded-full bg-slate-800/90 border border-slate-700/60 text-xs text-slate-300">
+          <span class="relative flex h-2 w-2">
+            <span id="modelStatusPing" class="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
+            <span id="modelStatusDot" class="relative inline-flex rounded-full h-2 w-2 bg-amber-500"></span>
+          </span>
+          <span id="modelStatusText" class="font-medium">Loading Model...</span>
+        </div>
+
+        <!-- Change Model Settings Button -->
+        <button id="btnOpenSettings" class="p-2 text-slate-400 hover:text-white bg-slate-800/60 hover:bg-slate-800 border border-slate-700/60 rounded-lg transition" title="Model Configuration">
+          <i data-lucide="settings-2" class="w-4 h-4"></i>
+        </button>
+
+        <!-- Deployment Guide Button -->
+        <button id="btnOpenDeploy" class="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-white bg-gradient-to-r from-indigo-600 to-indigo-500 hover:from-indigo-500 hover:to-indigo-400 rounded-lg shadow-md shadow-indigo-500/20 transition">
+          <i data-lucide="cloud-upload" class="w-3.5 h-3.5"></i>
+          <span class="hidden sm:inline">Deploy Website</span>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Container -->
+  <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+
+    <!-- Top Alert Banner (Dynamically shown on malpractice) -->
+    <div id="malpracticeBanner" class="hidden mb-6 p-4 rounded-xl border border-red-500/50 bg-red-950/40 backdrop-blur-md shadow-lg shadow-red-500/10 flex items-center justify-between animate-pulse-fast">
+      <div class="flex items-center gap-3">
+        <div class="p-2 rounded-lg bg-red-500/20 text-red-400">
+          <i data-lucide="alert-triangle" class="w-6 h-6"></i>
+        </div>
+        <div>
+          <h3 class="text-sm font-bold text-red-300 uppercase tracking-wider flex items-center gap-2">
+            SECURITY ALERT: SMARTPHONE MALPRACTICE DETECTED!
+          </h3>
+          <p id="malpracticeBannerDetail" class="text-xs text-red-200/90 mt-0.5 font-mono">
+            Student marked Absent automatically. Incident recorded in room audit log.
+          </p>
+        </div>
+      </div>
+      <div class="flex items-center gap-2">
+        <button id="btnDismissAlert" class="px-3 py-1 text-xs font-medium text-red-300 hover:text-white bg-red-900/60 hover:bg-red-800 rounded-lg transition">
+          Acknowledge
+        </button>
+      </div>
+    </div>
+
+    <!-- Primary Grid -->
+    <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+
+      <!-- Left Column: Video & Photo Input (7 Cols) -->
+      <div class="lg:col-span-7 flex flex-col gap-5">
+
+        <!-- Visual Input Card -->
+        <div class="bg-slate-900/80 border border-slate-800 rounded-2xl p-5 backdrop-blur-sm shadow-xl flex flex-col gap-4">
+          
+          <!-- Mode Switcher Tabs -->
+          <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+            <div class="flex items-center gap-1 bg-slate-950/70 p-1 rounded-xl border border-slate-800">
+              <button id="tabWebcam" class="flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-semibold bg-indigo-600 text-white shadow-sm transition">
+                <i data-lucide="camera" class="w-3.5 h-3.5"></i>
+                Live Camera
+              </button>
+              <button id="tabUpload" class="flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-medium text-slate-400 hover:text-slate-200 transition">
+                <i data-lucide="image" class="w-3.5 h-3.5"></i>
+                Upload Photo
+              </button>
+            </div>
+
+            <!-- Controls (Audio & Flip) -->
+            <div class="flex items-center gap-2">
+              <button id="btnToggleSound" class="p-2 rounded-lg bg-slate-800/80 hover:bg-slate-700 text-slate-400 hover:text-white text-xs border border-slate-700/60 transition flex items-center gap-1.5" title="Toggle Alarm Chime">
+                <i id="soundIcon" data-lucide="volume-2" class="w-4 h-4 text-emerald-400"></i>
+                <span id="soundLabel" class="text-[11px] font-mono">Alarm On</span>
+              </button>
+              <span id="fpsBadge" class="hidden sm:inline-block text-[11px] font-mono px-2 py-1 rounded bg-slate-800 text-slate-400 border border-slate-700">0 FPS</span>
+            </div>
+          </div>
+
+          <!-- Viewport Stage -->
+          <div class="relative w-full aspect-video bg-black rounded-xl overflow-hidden border border-slate-800 shadow-inner flex items-center justify-center group">
+            
+            <!-- Video Element -->
+            <div id="webcamContainer" class="w-full h-full flex items-center justify-center relative">
+              <div id="webcamPlaceholder" class="flex flex-col items-center justify-center text-slate-500 gap-3 p-6 text-center">
+                <div class="w-16 h-16 rounded-full bg-slate-800/60 border border-slate-700 flex items-center justify-center text-slate-400 group-hover:scale-105 transition">
+                  <i data-lucide="video-off" class="w-8 h-8"></i>
+                </div>
+                <div>
+                  <p class="text-sm font-medium text-slate-300">Live Camera is Standby</p>
+                  <p class="text-xs text-slate-500 mt-1">Click "Start Live Monitor" below to begin real-time detection</p>
+                </div>
+              </div>
+            </div>
+
+            <!-- Upload Dropzone Viewport (Hidden initially) -->
+            <div id="uploadContainer" class="hidden w-full h-full relative flex flex-col items-center justify-center p-6 text-center cursor-pointer hover:bg-slate-950/40 transition border-2 border-dashed border-slate-700 hover:border-indigo-500 rounded-xl m-2">
+              <input type="file" id="imageFileInput" accept="image/*" class="absolute inset-0 opacity-0 cursor-pointer z-20">
+              <img id="previewImage" class="hidden max-h-full max-w-full object-contain rounded-lg shadow-md z-10" alt="Inspection Photo">
+              <div id="dropzonePrompt" class="flex flex-col items-center gap-3 pointer-events-none">
+                <div class="w-14 h-14 rounded-full bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center text-indigo-400">
+                  <i data-lucide="upload-cloud" class="w-7 h-7"></i>
+                </div>
+                <div>
+                  <p class="text-sm font-semibold text-slate-200">Drop examination photo here or click to browse</p>
+                  <p class="text-xs text-slate-400 mt-1">Supports JPG, PNG, WEBP high-res images</p>
+                </div>
+              </div>
+            </div>
+
+            <!-- Scanning line animation during active prediction -->
+            <div id="scanLine" class="hidden absolute left-0 right-0 h-[2px] bg-gradient-to-r from-transparent via-indigo-500 to-transparent shadow-[0_0_12px_#6366f1] animate-scan z-10 pointer-events-none"></div>
+
+            <!-- Overlay Watermark / HUD -->
+            <div class="absolute bottom-3 left-3 right-3 flex items-center justify-between pointer-events-none z-10 text-[11px] font-mono">
+              <div id="hudStatus" class="px-2.5 py-1 rounded bg-slate-900/80 backdrop-blur-sm border border-slate-700 text-slate-300">
+                SYSTEM: STANDBY
+              </div>
+              <div id="hudConfidence" class="px-2.5 py-1 rounded bg-slate-900/80 backdrop-blur-sm border border-slate-700 text-slate-300">
+                MAX CONF: --
+              </div>
+            </div>
+          </div>
+
+          <!-- Action Buttons / Sensitivity Slider -->
+          <div class="flex flex-wrap items-center justify-between gap-3 pt-1">
+            <div class="flex items-center gap-2">
+              <button id="btnToggleCamera" class="flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-500 active:scale-95 transition shadow-lg shadow-indigo-600/25">
+                <i data-lucide="play" class="w-3.5 h-3.5"></i>
+                <span id="btnCameraText">Start Live Monitor</span>
+              </button>
+              <button id="btnCapturePhoto" class="hidden px-3.5 py-2 rounded-xl text-xs font-medium text-slate-300 bg-slate-800 hover:bg-slate-700 border border-slate-700 transition flex items-center gap-1.5">
+                <i data-lucide="camera" class="w-3.5 h-3.5"></i>
+                Take Snapshot
+              </button>
+            </div>
+
+            <!-- Detection Threshold -->
+            <div class="flex items-center gap-3 bg-slate-950/60 px-3 py-1.5 rounded-xl border border-slate-800">
+              <span class="text-xs text-slate-400 font-mono">Malpractice Alarm:</span>
+              <input type="range" id="confidenceThreshold" min="50" max="95" value="70" class="w-24 accent-indigo-500 cursor-pointer">
+              <span id="thresholdValue" class="text-xs font-mono font-semibold text-indigo-400">&gt; 70%</span>
+            </div>
+          </div>
+
+        </div>
+
+        <!-- Real-Time Class Confidence Meters -->
+        <div class="bg-slate-900/80 border border-slate-800 rounded-2xl p-5 backdrop-blur-sm shadow-xl flex flex-col gap-3">
+          <div class="flex items-center justify-between">
+            <h3 class="text-xs font-bold uppercase tracking-wider text-slate-400 flex items-center gap-2">
+              <i data-lucide="bar-chart-2" class="w-4 h-4 text-indigo-400"></i>
+              Live Model Probabilities
+            </h3>
+            <span class="text-[11px] font-mono text-slate-500">6 Trained Classes</span>
+          </div>
+
+          <!-- Dynamic Bars Container -->
+          <div id="confidenceBarsContainer" class="space-y-2.5 pt-1">
+            <!-- Populated dynamically via app.js -->
+            <div class="text-center py-4 text-xs text-slate-500">Loading model classes...</div>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- Right Column: Student Roster & Smart Room Actions (5 Cols) -->
+      <div class="lg:col-span-5 flex flex-col gap-5">
+
+        <!-- Smart Room Status Card -->
+        <div class="bg-slate-900/80 border border-slate-800 rounded-2xl p-5 backdrop-blur-sm shadow-xl flex flex-col gap-4">
+          <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+            <div>
+              <h2 class="text-sm font-bold text-white flex items-center gap-2">
+                <i data-lucide="cpu" class="w-4 h-4 text-indigo-400"></i>
+                Room Automation State
+              </h2>
+              <p class="text-xs text-slate-400 mt-0.5">Hall 104 - Alternate Smart Room</p>
+            </div>
+            <span id="roomStateBadge" class="px-2.5 py-1 text-xs font-bold rounded-lg uppercase bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+              NORMAL
+            </span>
+          </div>
+
+          <!-- Room Controls & Metrics -->
+          <div class="grid grid-cols-2 gap-3">
+            <div class="bg-slate-950/60 p-3 rounded-xl border border-slate-800">
+              <p class="text-[11px] text-slate-400 font-medium">Smart Door Lock</p>
+              <p id="roomDoorStatus" class="text-xs font-semibold text-slate-200 mt-1 flex items-center gap-1.5">
+                <i data-lucide="lock" class="w-3.5 h-3.5 text-indigo-400"></i>
+                Auto-Restricted
+              </p>
+            </div>
+            <div class="bg-slate-950/60 p-3 rounded-xl border border-slate-800">
+              <p class="text-[11px] text-slate-400 font-medium">Exam Hall Jammer</p>
+              <p id="roomJammerStatus" class="text-xs font-semibold text-emerald-400 mt-1 flex items-center gap-1.5">
+                <i data-lucide="wifi" class="w-3.5 h-3.5"></i>
+                Active Scan
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <!-- Student Attendance & Malpractice Roster -->
+        <div class="bg-slate-900/80 border border-slate-800 rounded-2xl p-5 backdrop-blur-sm shadow-xl flex flex-col gap-3">
+          <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+            <div>
+              <h3 class="text-sm font-bold text-white flex items-center gap-2">
+                <i data-lucide="users" class="w-4 h-4 text-indigo-400"></i>
+                Monitored Students
+              </h3>
+              <p class="text-xs text-slate-400">Trained candidate IDs</p>
+            </div>
+            <button id="btnResetRoster" class="text-xs text-slate-400 hover:text-white transition flex items-center gap-1">
+              <i data-lucide="rotate-ccw" class="w-3 h-3"></i>
+              Reset
+            </button>
+          </div>
+
+          <!-- Student Cards -->
+          <div class="space-y-2.5">
+            
+            <!-- Student 1: 44733003 -->
+            <div id="studentCard-44733003" class="p-3 rounded-xl bg-slate-950/50 border border-slate-800 transition flex items-center justify-between">
+              <div class="flex items-center gap-3">
+                <div class="w-8 h-8 rounded-lg bg-slate-800 flex items-center justify-center font-mono font-bold text-xs text-slate-300">
+                  03
+                </div>
+                <div>
+                  <h4 class="text-xs font-bold text-slate-200 font-mono">ID: 44733003</h4>
+                  <p class="text-[11px] text-slate-400">Candidate A</p>
+                </div>
+              </div>
+              <div class="text-right">
+                <span id="badge-44733003" class="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-semibold bg-slate-800 text-slate-400 border border-slate-700">
+                  Pending
+                </span>
+                <p id="time-44733003" class="text-[10px] text-slate-500 font-mono mt-0.5">--</p>
+              </div>
+            </div>
+
+            <!-- Student 2: 44733010 -->
+            <div id="studentCard-44733010" class="p-3 rounded-xl bg-slate-950/50 border border-slate-800 transition flex items-center justify-between">
+              <div class="flex items-center gap-3">
+                <div class="w-8 h-8 rounded-lg bg-slate-800 flex items-center justify-center font-mono font-bold text-xs text-slate-300">
+                  10
+                </div>
+                <div>
+                  <h4 class="text-xs font-bold text-slate-200 font-mono">ID: 44733010</h4>
+                  <p class="text-[11px] text-slate-400">Candidate B</p>
+                </div>
+              </div>
+              <div class="text-right">
+                <span id="badge-44733010" class="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-semibold bg-slate-800 text-slate-400 border border-slate-700">
+                  Pending
+                </span>
+                <p id="time-44733010" class="text-[10px] text-slate-500 font-mono mt-0.5">--</p>
+              </div>
+            </div>
+
+            <!-- Student 3: 44733013 -->
+            <div id="studentCard-44733013" class="p-3 rounded-xl bg-slate-950/50 border border-slate-800 transition flex items-center justify-between">
+              <div class="flex items-center gap-3">
+                <div class="w-8 h-8 rounded-lg bg-slate-800 flex items-center justify-center font-mono font-bold text-xs text-slate-300">
+                  13
+                </div>
+                <div>
+                  <h4 class="text-xs font-bold text-slate-200 font-mono">ID: 44733013</h4>
+                  <p class="text-[11px] text-slate-400">Candidate C</p>
+                </div>
+              </div>
+              <div class="text-right">
+                <span id="badge-44733013" class="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-semibold bg-slate-800 text-slate-400 border border-slate-700">
+                  Pending
+                </span>
+                <p id="time-44733013" class="text-[10px] text-slate-500 font-mono mt-0.5">--</p>
+              </div>
+            </div>
+
+          </div>
+        </div>
+
+        <!-- Incident & Attendance Activity Log -->
+        <div class="bg-slate-900/80 border border-slate-800 rounded-2xl p-5 backdrop-blur-sm shadow-xl flex flex-col gap-3">
+          <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+            <h3 class="text-xs font-bold uppercase tracking-wider text-slate-400 flex items-center gap-2">
+              <i data-lucide="file-clock" class="w-4 h-4 text-indigo-400"></i>
+              Activity Audit Log
+            </h3>
+            <button id="btnExportCSV" class="text-xs text-indigo-400 hover:text-indigo-300 font-semibold flex items-center gap-1 transition">
+              <i data-lucide="download" class="w-3.5 h-3.5"></i>
+              Export CSV
+            </button>
+          </div>
+
+          <div id="logList" class="h-44 overflow-y-auto space-y-2 pr-1 font-mono text-xs text-slate-400">
+            <div class="p-2 rounded bg-slate-950/40 border border-slate-800/80 text-slate-500 text-center">
+              System initialized. Awaiting sensor inputs...
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+    </div>
+
+  </main>
+
+  <!-- Settings Modal (Change Teachable Machine URL) -->
+  <div id="settingsModal" class="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+    <div class="bg-slate-900 border border-slate-800 rounded-2xl max-w-lg w-full p-6 shadow-2xl flex flex-col gap-4">
+      <div class="flex items-center justify-between">
+        <h3 class="text-base font-bold text-white flex items-center gap-2">
+          <i data-lucide="sliders" class="w-5 h-5 text-indigo-400"></i>
+          Model Configuration
+        </h3>
+        <button id="btnCloseSettings" class="text-slate-400 hover:text-white transition">
+          <i data-lucide="x" class="w-5 h-5"></i>
+        </button>
+      </div>
+
+      <div class="space-y-3">
+        <label class="text-xs font-semibold text-slate-300 block">
+          Teachable Machine Cloud Model URL:
+        </label>
+        <input type="text" id="inputModelUrl" value="https://teachablemachine.withgoogle.com/models/FZ36RgbjB/" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3.5 py-2.5 text-xs text-indigo-300 font-mono focus:outline-none focus:border-indigo-500 transition">
+        <p class="text-[11px] text-slate-400 leading-relaxed">
+          Must end with a trailing slash <code class="text-indigo-400 font-mono">/</code>. The app loads <code class="text-indigo-400 font-mono">model.json</code> and <code class="text-indigo-400 font-mono">metadata.json</code> directly from Teachable Machine.
+        </p>
+      </div>
+
+      <div class="flex justify-end gap-2 pt-2">
+        <button id="btnSaveModel" class="px-4 py-2 text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-500 rounded-xl shadow-lg transition">
+          Reload Model
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Deployment Guide Modal -->
+  <div id="deployModal" class="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+    <div class="bg-slate-900 border border-slate-800 rounded-2xl max-w-2xl w-full p-6 shadow-2xl flex flex-col gap-4 max-h-[90vh] overflow-y-auto">
+      <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+        <h3 class="text-base font-bold text-white flex items-center gap-2">
+          <i data-lucide="rocket" class="w-5 h-5 text-indigo-400"></i>
+          Deploy Your Smart Room Proctor Website
+        </h3>
+        <button id="btnCloseDeploy" class="text-slate-400 hover:text-white transition">
+          <i data-lucide="x" class="w-5 h-5"></i>
+        </button>
+      </div>
+
+      <p class="text-xs text-slate-300 leading-relaxed">
+        Because this application runs entirely client-side using TensorFlow.js, you can host it for free with zero backend server maintenance. Choose any of these 3 instant methods:
+      </p>
+
+      <div class="space-y-4">
+        <!-- Option 1: Vercel -->
+        <div class="p-4 rounded-xl bg-slate-950/70 border border-slate-800 flex flex-col gap-2">
+          <div class="flex items-center justify-between">
+            <span class="font-bold text-xs text-white flex items-center gap-2">
+              <span class="w-5 h-5 rounded bg-white text-black font-bold flex items-center justify-center text-[10px]">▲</span>
+              Option 1: Deploy with Vercel (Instant 30s)
+            </span>
+            <span class="text-[10px] font-semibold text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20">Recommended</span>
+          </div>
+          <ol class="text-xs text-slate-400 space-y-1.5 list-decimal list-inside">
+            <li>In this project directory, run: <code class="text-indigo-400 font-mono bg-slate-900 px-1.5 py-0.5 rounded">npx vercel</code></li>
+            <li>Follow the quick prompts (Log in with GitHub / Email).</li>
+            <li>You receive an instant live URL like <code class="text-indigo-400 font-mono">https://smart-room-proctor.vercel.app</code> with HTTPS and camera permissions enabled!</li>
+          </ol>
+        </div>
+
+        <!-- Option 2: Netlify Drop -->
+        <div class="p-4 rounded-xl bg-slate-950/70 border border-slate-800 flex flex-col gap-2">
+          <span class="font-bold text-xs text-white flex items-center gap-2">
+            <i data-lucide="globe" class="w-4 h-4 text-cyan-400"></i>
+            Option 2: Netlify Drop (Zero Terminal / Drag & Drop)
+          </span>
+          <ol class="text-xs text-slate-400 space-y-1.5 list-decimal list-inside">
+            <li>Open <a href="https://app.netlify.com/drop" target="_blank" class="text-indigo-400 underline hover:text-indigo-300">app.netlify.com/drop</a> in your browser.</li>
+            <li>Drag & drop the entire <code class="text-indigo-400 font-mono bg-slate-900 px-1.5 py-0.5 rounded">smart-room-detector</code> folder onto Netlify.</li>
+            <li>Netlify instantly deploys it and gives you a public HTTPS website.</li>
+          </ol>
+        </div>
+
+        <!-- Option 3: GitHub Pages -->
+        <div class="p-4 rounded-xl bg-slate-950/70 border border-slate-800 flex flex-col gap-2">
+          <span class="font-bold text-xs text-white flex items-center gap-2">
+            <i data-lucide="github" class="w-4 h-4 text-slate-300"></i>
+            Option 3: GitHub Pages (Permanent Free Hosting)
+          </span>
+          <ol class="text-xs text-slate-400 space-y-1.5 list-decimal list-inside">
+            <li>Create a new repository on GitHub (e.g. <code class="text-indigo-400 font-mono">smart-room-proctor</code>).</li>
+            <li>Push these files to the main branch.</li>
+            <li>Go to <strong class="text-slate-300">Repository Settings → Pages</strong>, select Branch: <strong class="text-slate-300">main</strong>, and click <strong class="text-slate-300">Save</strong>.</li>
+          </ol>
+        </div>
+      </div>
+
+      <div class="flex justify-end pt-2">
+        <button id="btnCloseDeploy2" class="px-4 py-2 text-xs font-semibold text-slate-300 hover:text-white bg-slate-800 hover:bg-slate-700 rounded-xl transition">
+          Close
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Scripts -->
+  <script src="app.js"></script>
+</body>
+</html>
